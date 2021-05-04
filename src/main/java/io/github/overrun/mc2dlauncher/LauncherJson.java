@@ -39,6 +39,8 @@ import java.util.Set;
 public final class LauncherJson {
     private final Set<String> versions = new HashSet<>();
     private String vmOptions;
+    private String gameCoreSrc;
+    private String libSrc;
 
     public Set<String> getVersions() {
         return versions;
@@ -52,6 +54,22 @@ public final class LauncherJson {
         this.vmOptions = vmOptions;
     }
 
+    public String getGameCoreSrc() {
+        return gameCoreSrc;
+    }
+
+    public void setGameCoreSrc(String gameCoreSrc) {
+        this.gameCoreSrc = gameCoreSrc;
+    }
+
+    public String getLibSrc() {
+        return libSrc;
+    }
+
+    public void setLibSrc(String libSrc) {
+        this.libSrc = libSrc;
+    }
+
     public static final class Serializer extends TypeAdapter<LauncherJson> {
         @Override
         public void write(JsonWriter out, LauncherJson value) throws IOException {
@@ -59,7 +77,11 @@ public final class LauncherJson {
             for (String ver : value.getVersions()) {
                 out.value(ver);
             }
-            out.endArray().name("vmOptions").value(value.getVmOptions()).endObject();
+            out.endArray()
+                    .name("vmOptions").value(value.getVmOptions())
+                    .name("gameCoreSrc").value(value.getGameCoreSrc())
+                    .name("libSrc").value(value.getLibSrc())
+                    .endObject();
         }
 
         @Override
@@ -77,6 +99,12 @@ public final class LauncherJson {
                         break;
                     case "vmOptions":
                         launcherJson.setVmOptions(in.nextString());
+                        break;
+                    case "gameCoreSrc":
+                        launcherJson.setGameCoreSrc(in.nextString());
+                        break;
+                    case "libSrc":
+                        launcherJson.setLibSrc(in.nextString());
                     default:
                 }
             }

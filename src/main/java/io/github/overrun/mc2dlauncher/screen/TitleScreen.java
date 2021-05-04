@@ -25,8 +25,9 @@
 package io.github.overrun.mc2dlauncher.screen;
 
 import io.github.overrun.mc2dlauncher.Main;
-import io.github.overrun.mc2dlauncher.util.Libraries;
+import io.github.overrun.mc2dlauncher.util.VersionJson;
 import io.github.overrun.mc2dlauncher.util.OperatingSystem;
+import org.graalvm.compiler.core.CompilerThreadFactory;
 
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -41,10 +42,17 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.PrintStream;
 import java.io.Reader;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
+import static io.github.overrun.mc2dlauncher.Main.CONSOLE_SCREEN;
 import static io.github.overrun.mc2dlauncher.Main.RESOURCE_BUNDLE;
 import static io.github.overrun.mc2dlauncher.screen.DownloadScreen.LIB_GSON;
 
@@ -53,6 +61,18 @@ import static io.github.overrun.mc2dlauncher.screen.DownloadScreen.LIB_GSON;
  * @since 2021/02/06
  */
 public final class TitleScreen extends JPanel {
+    private static final ExecutorService THREAD_POOL = new ThreadPoolExecutor(
+            1,
+            1,
+            0,
+            TimeUnit.MILLISECONDS,
+            new LinkedBlockingQueue<>(5),
+            r -> {
+                Thread thread = new Thread(r);
+                thread.setName("Game-" + thread.getId());
+                return thread;
+            }
+    );
     private final JComboBox<String> box = new JComboBox<>();
 
     public TitleScreen() {
@@ -69,13 +89,17 @@ public final class TitleScreen extends JPanel {
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
         JButton play = new JButton(RESOURCE_BUNDLE.getString("play"));
         play.addActionListener(e -> {
+            CONSOLE_SCREEN.getTextArea().setText(null);
             try {
-                Libraries libraries;
-                try (Reader r = new BufferedReader(new FileReader(".mc2d/versions/" + box.getSelectedItem() + "/" + box.getSelectedItem() + ".json"))) {
-                    libraries = LIB_GSON.fromJson(r, Libraries.class);
+                VersionJson json;
+                try (Reader r = new BufferedReader(
+                        new FileReader(
+                                ".mc2d/versions/" + box.getSelectedItem() + "/" + box.getSelectedItem() + ".json"))
+                ) {
+                    json = LIB_GSON.fromJson(r, VersionJson.class);
                 }
-                List<String> libs = new ArrayList<>(libraries.getLibs().length);
-                for (String lib : libraries.getLibs()) {
+                List<String> libs = new ArrayList<>(json.getLibs().length);
+                for (String lib : json.getLibs()) {
                     libs.add("../../libraries/" + lib + ".jar");
                     if (lib.contains("lwjgl")) {
                         libs.add("../../libraries/" + lib + "-natives-" + OperatingSystem.CURRENT.getNativeName() + ".jar");
@@ -92,25 +116,37 @@ public final class TitleScreen extends JPanel {
                 cmdArray[2] += box.getSelectedItem() + ".jar\"";
                 cmdArray[3] = area.getText();
                 cmdArray[4] = "io.github.overrun.mc2d.Main";
-                Process process = exec(".mc2d/versions/" + box.getSelectedItem(), cmdArray);
-                InputStream stdout = process.getInputStream(), stderr = process.getErrorStream();
-                try (InputStreamReader isr = new InputStreamReader(stdout);
-                     BufferedReader br = new BufferedReader(isr);
-                     InputStreamReader errIsr = new InputStreamReader(stderr);
-                     BufferedReader errBr = new BufferedReader(errIsr)) {
-                    String line;
-                    while ((line = br.readLine()) != null) {
-                        System.out.println(line);
+                THREAD_POOL.execute(() -> {
+                    try {
+                        Process process = exec(".mc2d/versions/" + box.getSelectedItem(), cmdArray);
+                        InputStream stdout = process.getInputStream(), stderr = process.getErrorStream();
+                        try (InputStreamReader isr = new InputStreamReader(stdout);
+                             BufferedReader br = new BufferedReader(isr);
+                             InputStreamReader errIsr = new InputStreamReader(stderr);
+                             BufferedReader errBr = new BufferedReader(errIsr)) {
+                            String line;
+                            PrintStream stream;
+                            while (true) {
+                                if ((line = br.readLine()) != null) {
+                                    stream = System.out;
+                                } else if ((line = errBr.readLine()) != null) {
+                                    stream = System.err;
+                                } else {
+                                    break;
+                                }
+                                CONSOLE_SCREEN.getTextArea().append(line);
+                                CONSOLE_SCREEN.getTextArea().append("\n");
+                                stream.println(line);
+                            }
+                        }
+                    } catch (IOException ee) {
+                        ee.printStackTrace();
                     }
-                    while ((line = errBr.readLine()) != null) {
-                        System.err.println(line);
-                    }
-                }
+                });
             } catch (IOException ee) {
                 ee.printStackTrace();
             }
         });
-        play.setSize(play.getWidth() << 1, play.getHeight() << 1);
         add(play);
         add(box);
         JButton refresh = new JButton(RESOURCE_BUNDLE.getString("refresh"));

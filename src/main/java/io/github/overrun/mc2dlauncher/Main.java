@@ -26,6 +26,7 @@ package io.github.overrun.mc2dlauncher;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import io.github.overrun.mc2dlauncher.screen.ConsoleScreen;
 import io.github.overrun.mc2dlauncher.screen.DownloadScreen;
 import io.github.overrun.mc2dlauncher.screen.TitleScreen;
 
@@ -53,6 +54,7 @@ public final class Main {
             .registerTypeAdapter(LauncherJson.class, new LauncherJson.Serializer())
             .create();
     public static final ResourceBundle RESOURCE_BUNDLE = ResourceBundle.getBundle("texts");
+    public static final ConsoleScreen CONSOLE_SCREEN = new ConsoleScreen();
     private static LauncherJson launcherJson;
 
     public static LauncherJson getLauncherJson() {
@@ -81,7 +83,10 @@ public final class Main {
             }
         } else {
             try (Writer w = new FileWriter(file)) {
-                w.write(GSON.toJson(launcherJson = new LauncherJson()));
+                launcherJson = new LauncherJson();
+                launcherJson.setGameCoreSrc("https://over-run.github.io/mc2d/version/");
+                launcherJson.setLibSrc("https://repo1.maven.org/maven2/");
+                w.write(GSON.toJson(launcherJson));
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -93,6 +98,7 @@ public final class Main {
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.addTab("Home", new TitleScreen());
         tabbedPane.addTab(RESOURCE_BUNDLE.getString("download.download"), new DownloadScreen());
+        tabbedPane.addTab(RESOURCE_BUNDLE.getString("screen.console"), CONSOLE_SCREEN);
         frame.getContentPane().add(tabbedPane);
         frame.setVisible(true);
     }

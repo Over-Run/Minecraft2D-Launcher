@@ -26,8 +26,7 @@ package io.github.overrun.mc2dlauncher.screen;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import io.github.overrun.mc2dlauncher.Main;
-import io.github.overrun.mc2dlauncher.util.Libraries;
+import io.github.overrun.mc2dlauncher.util.VersionJson;
 import io.github.overrun.mc2dlauncher.util.Mc2dVersion;
 import io.github.overrun.mc2dlauncher.util.NetworkHelper;
 import io.github.overrun.mc2dlauncher.util.OperatingSystem;
@@ -47,6 +46,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 
 import static io.github.overrun.mc2dlauncher.Main.RESOURCE_BUNDLE;
+import static io.github.overrun.mc2dlauncher.Main.getLauncherJson;
 
 /**
  * @author squid233
@@ -62,7 +62,7 @@ public final class DownloadScreen extends JPanel {
     public static final Gson LIB_GSON = new GsonBuilder()
             .setPrettyPrinting()
             .disableHtmlEscaping()
-            .registerTypeAdapter(Libraries.class, new Libraries.Serializer())
+            .registerTypeAdapter(VersionJson.class, new VersionJson.Serializer())
             .create();
     private final JComboBox<String> versionsBox = new JComboBox<>();
     private Mc2dVersion mc2dVersion = null;
@@ -85,57 +85,50 @@ public final class DownloadScreen extends JPanel {
                 dir.mkdirs();
             }
             try {
-                JOptionPane.showMessageDialog(null, RESOURCE_BUNDLE.getString("download.ready"));
                 String ver = String.valueOf(versionsBox.getSelectedItem());
                 dir = new File(".mc2d/versions/" + ver);
                 if (!dir.exists()) {
                     dir.mkdirs();
                 }
-                String versionJar = ".mc2d/versions/" + ver + "/" + ver + ".jar";
+                String versionPre = ".mc2d/versions/" + ver + "/" + ver;
+                String versionJar = versionPre + ".jar";
                 if (!new File(versionJar).exists()) {
-                    NetworkHelper.download(new URL("https://over-run.github.io/mc2d/version/" + mc2dVersion.getMap().get(ver) + ".jar"),
-                            versionJar);
+                    NetworkHelper.download(
+                            new URL(getLauncherJson().getGameCoreSrc() + mc2dVersion.getMap().get(ver) + ".jar"),
+                            versionJar
+                    );
                     try (Writer w = new FileWriter("launcher.json")) {
-                        Main.getLauncherJson().getVersions().add(ver);
-                        w.write(GSON.toJson(Main.getLauncherJson()));
+                        getLauncherJson().getVersions().add(ver);
+                        w.write(GSON.toJson(getLauncherJson()));
                     } catch (IOException ee) {
                         ee.printStackTrace();
                     }
                 }
-                String versionJson = ".mc2d/versions/" + ver + "/" + ver + ".json";
+                String versionJson = versionPre + ".json";
                 if (!new File(versionJson).exists()) {
-                    NetworkHelper.download(new URL("https://over-run.github.io/mc2d/version/" + mc2dVersion.getMap().get(ver) + ".json"),
-                            versionJson);
+                    NetworkHelper.download(
+                            new URL(getLauncherJson().getGameCoreSrc() + mc2dVersion.getMap().get(ver) + ".json"),
+                            versionJson
+                    );
                 }
-                Libraries libraries;
+                VersionJson json;
                 try (Reader r = new BufferedReader(new FileReader(versionJson))) {
-                    libraries = LIB_GSON.fromJson(r, Libraries.class);
+                    json = LIB_GSON.fromJson(r, VersionJson.class);
                 }
-                for (String lib : libraries.getLibs()) {
-                    String libJar = ".mc2d/libraries/" + lib + ".jar";
-                    if (!new File(libJar).exists()) {
-                        try {
-                            NetworkHelper.download(new URL("https://over-run.github.io/mc2d/libs/" + lib + ".jar"),
-                                    libJar);
-                        } catch (Throwable t) {
-                            t.printStackTrace();
-                            JOptionPane.showMessageDialog(null, "Download failed. " + t.getMessage());
-                        }
-                    }
-                    String nativeLibJar = ".mc2d/libraries/" + lib + "-natives-" + NATIVES_PLATFORM + ".jar";
-                    if (lib.contains("lwjgl") && !new File(nativeLibJar).exists()) {
-                        try {
-                            NetworkHelper.download(new URL("https://over-run.github.io/mc2d/libs/" + lib + "-natives-" + NATIVES_PLATFORM + ".jar"),
-                                    nativeLibJar);
-                        } catch (Throwable t) {
-                            t.printStackTrace();
-                            JOptionPane.showMessageDialog(null, String.format(RESOURCE_BUNDLE.getString("download.failed"), t.getMessage()));
-                        }
-                    }
+                switch (json.getSchemaVersion()) {
+                    case 1:
+                        downloadByVer1(json);
+                    default:
                 }
             } catch (Throwable t) {
                 t.printStackTrace();
-                JOptionPane.showMessageDialog(null, String.format(RESOURCE_BUNDLE.getString("download.failed"), t.getMessage()));
+                JOptionPane.showMessageDialog(
+                        null,
+                        String.format(
+                                RESOURCE_BUNDLE.getString("download.failed"),
+                                t.getMessage()
+                        )
+                );
             }
         });
         add(button);
@@ -145,9 +138,52 @@ public final class DownloadScreen extends JPanel {
         refresh();
     }
 
+    private void downloadByVer1(VersionJson json) {
+        for (String lib : json.getLibs()) {
+            String libJar = ".mc2d/libraries/" + lib + ".jar";
+            if (!new File(libJar).exists()) {
+                try {
+                    NetworkHelper.download(
+                            new URL(getLauncherJson().getLibSrc() + lib + ".jar"),
+                            libJar
+                    );
+                } catch (Throwable t) {
+                    t.printStackTrace();
+                    JOptionPane.showMessageDialog(null, "Download failed. " + t.getMessage());
+                }
+            }
+            String suffix = lib + "-natives-" + NATIVES_PLATFORM + ".jar";
+            String nativeLibJar = ".mc2d/libraries/" + suffix;
+            if (lib.contains("lwjgl") && !new File(nativeLibJar).exists()) {
+                try {
+                    NetworkHelper.download(
+                            new URL(
+                                    getLauncherJson().getLibSrc() + suffix
+                            ),
+                            nativeLibJar
+                    );
+                } catch (Throwable t) {
+                    t.printStackTrace();
+                    JOptionPane.showMessageDialog(
+                            null,
+                            String.format(
+                                    RESOURCE_BUNDLE.getString("download.failed"),
+                                    t.getMessage()
+                            )
+                    );
+                }
+            }
+        }
+    }
+
     public void refresh() {
         try {
-            mc2dVersion = GSON.fromJson(NetworkHelper.read(new URL("https://over-run.github.io/mc2d/version_manifest.json")), Mc2dVersion.class);
+            mc2dVersion = GSON.fromJson(
+                    NetworkHelper.read(
+                            new URL("https://over-run.github.io/mc2d/version_manifest.json")
+                    ),
+                    Mc2dVersion.class
+            );
         } catch (MalformedURLException e) {
             e.printStackTrace();
         }

@@ -25,6 +25,7 @@
 package io.github.overrun.mc2dlauncher.util;
 
 import java.io.BufferedInputStream;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -35,6 +36,8 @@ import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 /**
  * @author squid233
@@ -58,6 +61,9 @@ public final class NetworkHelper {
     }
 
     public static void download(URL url, String path) {
+        String p = path.substring(0, path.lastIndexOf('/'));
+        //noinspection ResultOfMethodCallIgnored
+        new File(p).mkdirs();
         try (InputStream is = url.openStream();
              ReadableByteChannel rbc = Channels.newChannel(is);
              FileOutputStream os = new FileOutputStream(path);

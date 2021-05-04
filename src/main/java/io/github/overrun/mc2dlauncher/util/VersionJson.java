@@ -36,10 +36,11 @@ import java.util.List;
  * @author squid233
  * @since 2021/02/06
  */
-public final class Libraries {
-    private String[] libs;
+public final class VersionJson {
+    private final String[] libs;
+    private int schemaVersion;
 
-    public Libraries(String[] libs) {
+    public VersionJson(String[] libs) {
         this.libs = libs;
     }
 
@@ -47,10 +48,20 @@ public final class Libraries {
         return libs;
     }
 
-    public static final class Serializer extends TypeAdapter<Libraries> {
+    public int getSchemaVersion() {
+        return schemaVersion;
+    }
+
+    public void setSchemaVersion(int schemaVersion) {
+        this.schemaVersion = schemaVersion;
+    }
+
+    public static final class Serializer extends TypeAdapter<VersionJson> {
         @Override
-        public void write(JsonWriter out, Libraries value) throws IOException {
-            out.beginObject().name("libs").beginArray();
+        public void write(JsonWriter out, VersionJson value) throws IOException {
+            out.beginObject()
+                    .name("schemaVersion").value(1)
+                    .name("libs").beginArray();
             for (String lib : value.getLibs()) {
                 out.value(lib);
             }
@@ -58,17 +69,28 @@ public final class Libraries {
         }
 
         @Override
-        public Libraries read(JsonReader in) throws IOException {
+        public VersionJson read(JsonReader in) throws IOException {
             List<String> list = new ArrayList<>();
+            int schemaVersion = 0;
             in.beginObject();
-            in.nextName();
-            in.beginArray();
             while (in.hasNext()) {
-                list.add(in.nextString());
+                switch (in.nextName()) {
+                    case "schemaVersion":
+                        schemaVersion = in.nextInt();
+                        break;
+                    case "libs":
+                        in.beginArray();
+                        while (in.hasNext()) {
+                            list.add(in.nextString());
+                        }
+                        in.endArray();
+                    default:
+                }
             }
-            in.endArray();
             in.endObject();
-            return new Libraries(list.toArray(new String[0]));
+            VersionJson json = new VersionJson(list.toArray(new String[0]));
+            json.setSchemaVersion(schemaVersion);
+            return json;
         }
     }
 }
